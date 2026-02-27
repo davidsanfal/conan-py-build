@@ -394,23 +394,46 @@ def _do_build_wheel(
         f"Running conan build (profiles: host={host_profile}, build={build_profile})...",
         flush=True,
     )
-    # -of staging_dir: conanfile.package_folder = staging_dir, so
-    # cmake.install() installs there. 
-    # -c build_folder: build tree goes to
-    # base_dir/build, not inside staging.
     try:
-        result = api.command.run(build_cmd)
+        build_result = api.command.run(build_cmd)
     except Exception as e:
         raise RuntimeError(f"Conan build failed: {e}") from e
 
-    deps_graph = result.get("graph")
+    print("Running conan export-pkg...", flush=True)
+    
+    deps_graph = build_result.get("graph")
+    conanfile = deps_graph.root.conanfile
+    
+    export_pkg_cmd = [
+        "export-pkg",
+        str(source_dir),
+        "-of",
+        str(staging_dir),
+        "-tf",
+        "",
+        "-c",
+        build_folder_conf,
+        "-c",
+        user_presets_conf,
+    ]
+    export_pkg_cmd.extend(profile_args)
+    try:
+        export_result = api.command.run(export_pkg_cmd)
+    except Exception as e:
+        raise RuntimeError(f"Conan export-pkg failed: {e}") from e
+
+    pkg_path = Path(export_result["graph"].serialize()["nodes"]["0"]["package_folder"])
+    shutil.copytree(
+        pkg_path, staging_dir,
+        ignore=lambda _, names: [n for n in names if n in ("conaninfo.txt", "conanmanifest.txt")],
+        dirs_exist_ok=True,
+    )
 
     # Create dist-info
     _create_dist_info(staging_dir, project_metadata, source_dir)
 
     # Build wheel using distlib. Apply Conan's buildenv to get cross-compile
     # wheel tags from [buildenv]
-    conanfile = deps_graph.root.conanfile
     buildenv = VirtualBuildEnv(conanfile)
     env_vars = buildenv.environment().vars(conanfile)
 

@@ -48,6 +48,9 @@ class MyPackageConan(ConanFile):
         cmake = CMake(self)
         cmake.configure()
         cmake.build()
+
+    def package(self):
+        cmake = CMake(self)
         cmake.install()
 ```
 
