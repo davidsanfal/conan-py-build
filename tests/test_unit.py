@@ -6,10 +6,12 @@ import pytest
 from conan.errors import ConanException
 
 from conan_py_build.build import (
+    _bump_last_segment,
     _parse_config,
     _parse_git_describe,
     _read_version_from_file,
     _resolve_version,
+    _resolve_project_path,
     _write_version_to_file,
     _get_sdist_config,
     _resolve_conanfile_path,
@@ -45,6 +47,7 @@ requires = ["conan-py-build"]
 build-backend = "conan_py_build.build"
 
 [tool.conan-py-build]
+version = "version-file"
 version-file = "python/myadder/__init__.py"
 
 [tool.conan-py-build.wheel]
@@ -108,10 +111,84 @@ def test_parse_git_describe(desc, expected):
     assert _parse_git_describe(desc) == expected
 
 
+@pytest.mark.parametrize("version,expected", [
+    ("1.2.3", "1.2.4"),
+    ("1.0", "1.1"),
+    ("3", "4"),
+    ("0.0.0", "0.0.1"),
+])
+def test_bump_last_segment(version, expected):
+    assert _bump_last_segment(version) == expected
+
+
+@pytest.mark.parametrize("desc,expected", [
+    ("v1.0.0-0-g775e71f", "1.0.0"),
+    ("v1.0.0-5-g775e71f", "1.0.1.dev5+g775e71f"),
+    ("v1.2.3-3-gabcdef0", "1.2.4.dev3+gabcdef0"),
+    ("v1.0.0-0-g775e71f-dirty", "1.0.1.dev0+g775e71f"),
+    ("abc1234", "0.0.1.dev0+gabc1234"),
+])
+def test_parse_git_describe_guess_next_dev(desc, expected):
+    assert _parse_git_describe(desc, version_scheme="guess-next-dev") == expected
+
+
+@pytest.mark.parametrize("desc,expected", [
+    ("v1.0.0-0-g775e71f", "1.0.0"),
+    ("v1.0.0-5-g775e71f", "1.0.0.dev5"),
+    ("v1.0.0-0-g775e71f-dirty", "1.0.0.dev0"),
+    ("abc1234", "0.0.0.dev0"),
+])
+def test_parse_git_describe_no_local_version(desc, expected):
+    assert _parse_git_describe(desc, local_scheme="no-local-version") == expected
+
+
+@pytest.mark.parametrize("desc,expected", [
+    ("v1.0.0-0-g775e71f", "1.0.0"),
+    ("v1.0.0-5-g775e71f", "1.0.1.dev5"),
+    ("v2.3.4-10-gabcdef0", "2.3.5.dev10"),
+    ("abc1234", "0.0.1.dev0"),
+])
+def test_parse_git_describe_guess_next_dev_no_local(desc, expected):
+    assert _parse_git_describe(desc, version_scheme="guess-next-dev",
+                               local_scheme="no-local-version") == expected
+
+
 def test_write_version_to_file_no_config(tmp_path):
     make_pyproject_minimal(tmp_path)
     _write_version_to_file(tmp_path, "1.2.3")
     assert not (tmp_path / "src" / "_version.py").exists()
+
+
+def test_write_version_to_file_with_scm_write_to(tmp_path):
+    (tmp_path / "pyproject.toml").write_text("""[project]
+name = "pkg"
+dynamic = ["version"]
+description = "Test"
+
+[build-system]
+requires = ["conan-py-build"]
+build-backend = "conan_py_build.build"
+
+[tool.conan-py-build]
+version = "version-scm"
+
+[tool.conan-py-build.version-scm]
+write-to = "src/pkg/_version.py"
+""", encoding="utf-8")
+    _write_version_to_file(tmp_path, "2.0.0")
+    vfile = tmp_path / "src" / "pkg" / "_version.py"
+    assert vfile.is_file()
+    assert '__version__ = "2.0.0"' in vfile.read_text(encoding="utf-8")
+
+
+def test_resolve_project_path_ok(tmp_path):
+    resolved = _resolve_project_path(tmp_path, "sub/file.py", "test")
+    assert resolved == (tmp_path / "sub" / "file.py").resolve()
+
+
+def test_resolve_project_path_outside_raises(tmp_path):
+    with pytest.raises(RuntimeError, match="must be inside project"):
+        _resolve_project_path(tmp_path, "../outside.py", "test")
 
 
 def test_resolve_version_from_metadata():
@@ -125,7 +202,7 @@ def test_resolve_version_missing_falls_back_to_0_0_0(tmp_path):
     assert _resolve_version(meta, tmp_path) == "0.0.0"
 
 
-def test_resolve_version_dynamic_without_version_file_raises(tmp_path):
+def test_resolve_version_dynamic_without_strategy_raises(tmp_path):
     (tmp_path / "pyproject.toml").write_text("""[project]
 name = "pkg"
 dynamic = ["version"]
@@ -137,6 +214,42 @@ build-backend = "conan_py_build.build"
 """, encoding="utf-8")
     meta = {"name": "pkg", "dynamic": ["version"]}
     with pytest.raises(RuntimeError, match="version could not be resolved"):
+        _resolve_version(meta, tmp_path)
+
+
+def test_resolve_version_unknown_strategy_raises(tmp_path):
+    (tmp_path / "pyproject.toml").write_text("""[project]
+name = "pkg"
+dynamic = ["version"]
+description = "Test"
+
+[build-system]
+requires = ["conan-py-build"]
+build-backend = "conan_py_build.build"
+
+[tool.conan-py-build]
+version = "unknown-strategy"
+""", encoding="utf-8")
+    meta = {"name": "pkg", "dynamic": ["version"]}
+    with pytest.raises(RuntimeError, match="Unknown version strategy"):
+        _resolve_version(meta, tmp_path)
+
+
+def test_resolve_version_file_missing_path_raises(tmp_path):
+    (tmp_path / "pyproject.toml").write_text("""[project]
+name = "pkg"
+dynamic = ["version"]
+description = "Test"
+
+[build-system]
+requires = ["conan-py-build"]
+build-backend = "conan_py_build.build"
+
+[tool.conan-py-build]
+version = "version-file"
+""", encoding="utf-8")
+    meta = {"name": "pkg", "dynamic": ["version"]}
+    with pytest.raises(RuntimeError, match='requires version-file'):
         _resolve_version(meta, tmp_path)
 
 

@@ -98,21 +98,55 @@ def _read_version_from_file(path: Path) -> Optional[str]:
             return None
     return None
 
-def _parse_git_describe(desc: str) -> Optional[str]:
-    """Parse git describe output."""
+def _bump_last_segment(tag: str) -> str:
+    """Increment the last numeric segment of a version string (guess-next-dev)."""
+    parts = tag.rsplit(".", 1)
+    if len(parts) == 2 and parts[1].isdigit():
+        return f"{parts[0]}.{int(parts[1]) + 1}"
+    if parts[0].isdigit():
+        return str(int(parts[0]) + 1)
+    return tag
+
+
+def _parse_git_describe(
+    desc: str,
+    version_scheme: str = "no-guess-dev",
+    local_scheme: str = "node",
+) -> Optional[str]:
+    """
+    Parse git describe output into a PEP 440 version.
+
+    version_scheme:
+        "no-guess-dev" (default) - keep the tag version as-is for dev builds (e.g. 1.2.3.dev5)
+        "guess-next-dev"         - bump the last numeric segment (e.g. 1.2.3 -> 1.2.4.dev5)
+    local_scheme:
+        "node" (default)         - include +gREV local part
+        "no-local-version"       - strip local part (required for PyPI)
+    """
     if not desc or not desc.strip():
         return None
     desc = desc.strip()
+    guess = version_scheme == "guess-next-dev"
+    no_local = local_scheme == "no-local-version"
+
     m = re.match(r"^v?(.+?)-(\d+)-g([a-f0-9]+)(?:-dirty)?$", desc)
     if m:
         tag, n, rev = m.group(1).lstrip("v"), int(m.group(2)), m.group(3)[:7]
-        return tag if n == 0 and "-dirty" not in desc else f"{tag}.dev{n}+g{rev}"
+        if n == 0 and "-dirty" not in desc:
+            return tag
+        base = _bump_last_segment(tag) if guess else tag
+        return f"{base}.dev{n}" if no_local else f"{base}.dev{n}+g{rev}"
+
     if re.fullmatch(r"[a-f0-9]{7,40}(?:-dirty)?", desc):
-        return f"0.0.0.dev0+g{desc.split('-')[0][:7]}"
+        rev = desc.split("-")[0][:7]
+        base = "0.0.1" if guess else "0.0.0"
+        return f"{base}.dev0" if no_local else f"{base}.dev0+g{rev}"
+
     return desc.lstrip("v") or None
 
 
-def _get_version_from_scm(source_dir: Path) -> Optional[str]:
+def _get_version_from_scm(source_dir: Path, version_scheme: str = "no-guess-dev",
+                           local_scheme: str = "node") -> Optional[str]:
     """Get version from git describe (PEP 440)."""
     try:
         result = subprocess.run(
@@ -121,7 +155,7 @@ def _get_version_from_scm(source_dir: Path) -> Optional[str]:
         )
         if result.returncode != 0 or not result.stdout:
             return None
-        return _parse_git_describe(result.stdout)
+        return _parse_git_describe(result.stdout, version_scheme, local_scheme)
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return None
 
@@ -148,38 +182,58 @@ def _resolve_conanfile_path(conanfile_path: str, source_dir: Path) -> Path:
 
 
 def _write_version_to_file(source_dir: Path, version: str) -> None:
-    """Write __version__ to the file configured in version-write-to (if set)."""
-    tool = _get_tool_config(source_dir)
-    write_to = tool.get("version-write-to")
-    if not write_to or not isinstance(write_to, str):
+    """Write __version__ to [tool.conan-py-build.version-scm].write-to if configured."""
+    scm_config = _get_tool_config(source_dir).get("version-scm", {})
+    write_to = scm_config.get("write-to") if isinstance(scm_config, dict) else None
+    if not write_to:
         return
-    resolved = (source_dir / write_to).resolve()
+    resolved = (source_dir / rel_path).resolve()
     try:
         resolved.relative_to(source_dir.resolve())
     except ValueError:
-        raise RuntimeError(
-            f"version-write-to must be inside project: {write_to!r}"
-        )
+        raise RuntimeError(f"{label} must be inside project: \"version-scm.write-to\"")
     resolved.parent.mkdir(parents=True, exist_ok=True)
     resolved.write_text(f'__version__ = "{version}"\n', encoding="utf-8")
 
 
 def _get_version_from_config(source_dir: Path) -> Optional[str]:
-    """Read version from [tool.conan-py-build] version-file if set. Reads pyproject from source_dir."""
+    """
+    Resolve dynamic version from [tool.conan-py-build].
+
+    version = "version-file"  →  reads __version__ from the path at version-file
+    version = "version-scm"   →  derives from git describe, options in [tool.conan-py-build.version-scm]
+    """
     tool = _get_tool_config(source_dir)
-    version_file = tool.get("version-file")
-    if version_file:
-        resolved = (source_dir / version_file).resolve()
+    strategy = tool.get("version")
+    if not strategy:
+        return None
+
+    if strategy == "version-file":
+        version_file = tool.get("version-file")
+        if not version_file or not isinstance(version_file, str):
+            raise RuntimeError(
+                'version = "version-file" requires version-file = "path/to/file.py"'
+            )
+        resolved = (source_dir / rel_path).resolve()
         try:
             resolved.relative_to(source_dir.resolve())
         except ValueError:
-            raise RuntimeError(
-                f"version-file must be inside project: {version_file!r}"
-            )
+            raise RuntimeError(f"{label} must be inside project: \"version-file\"")
         return _read_version_from_file(resolved)
-    version_scm = tool.get("version-scm")
-    if version_scm:
-        return _get_version_from_scm(source_dir)
+
+    if strategy == "version-scm":
+        scm_config = tool.get("version-scm", {})
+        if not isinstance(scm_config, dict):
+            scm_config = {}
+        return _get_version_from_scm(
+            source_dir,
+            scm_config.get("version-scheme", "no-guess-dev"),
+            scm_config.get("local-scheme", "node"),
+        )
+
+    raise RuntimeError(
+        f'Unknown version strategy: {strategy!r}. Use "version-file" or "version-scm".'
+    )
 
 
 def _resolve_version(project_metadata: dict, source_dir: Path) -> str:
@@ -191,8 +245,8 @@ def _resolve_version(project_metadata: dict, source_dir: Path) -> str:
         version = _get_version_from_config(source_dir)
         if version_is_dynamic and not version:
             raise RuntimeError(
-                "dynamic = [\"version\"] but version could not be resolved. "
-                "Set [tool.conan-py-build] version-file to a file with __version__ = \"x.y.z\" at module level."
+                'dynamic = ["version"] but version could not be resolved. '
+                'Set [tool.conan-py-build] version = "version-file" or version = "version-scm".'
             )
 
     version = version or "0.0.0"

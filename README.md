@@ -76,7 +76,8 @@ Configure in `pyproject.toml` under `[tool.conan-py-build]`:
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `version-file` | Path to a Python file from which to read `__version__` when `[project].version` is dynamic | (none) |
+| `version` | Version strategy: `"version-file"` or `"version-scm"` (only when `[project].version` is dynamic) | (none) |
+| `version-file` | Path to a Python file with `__version__` (used when `version = "version-file"`) | (none) |
 | `conanfile-path` | Path to the Conan recipe (directory containing `conanfile.py` or path to the file), relative to project root | `"."` (project root) |
 | `wheel.packages` | List of paths (relative to project root) of Python packages to include in the wheel; each must be a directory with `__init__.py` | `["src/<normalized_project_name>"]` |
 | `sdist.include` | List of paths or patterns to add to the sdist | `[]` |
@@ -85,18 +86,34 @@ Configure in `pyproject.toml` under `[tool.conan-py-build]`:
 
 ### Dynamic version
 
-There is limited support for dynamic version: set `dynamic = ["version"]` in
-`[project]` (no `version` key). The backend resolves version in this order:
+Set `dynamic = ["version"]` in `[project]` (no `version` key) and choose a
+strategy via `version` in `[tool.conan-py-build]`:
 
-1. **`version-file`**: Path to a Python file with `__version__ = "x.y.z"` at module level.
-2. **`version-scm`**: If `true`, derive version from `git describe --tags --dirty --always --long` (PEP 440).
-3. **`version-write-to`**: Path to write the resolved version. Creates/overwrites the file with `__version__ = "{version}"` before building wheel or sdist.
+**`version = "version-file"`** — read `__version__` from a Python file:
 
 ```toml
 [tool.conan-py-build]
-version-scm = true
-version-write-to = "src/mypackage/_version.py"
+version = "version-file"
+version-file = "src/mypackage/__init__.py"
 ```
+
+**`version = "version-scm"`** — derive version from `git describe` (PEP 440):
+
+```toml
+[tool.conan-py-build]
+version = "version-scm"
+
+[tool.conan-py-build.version-scm]
+version-scheme = "guess-next-dev"   # or "no-guess-dev" (default)
+local-scheme = "no-local-version"   # or "node" (default)
+write-to = "src/mypackage/_version.py"
+```
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `version-scheme` | `"no-guess-dev"`: keep tag version (e.g. `1.2.3.dev5`). `"guess-next-dev"`: bump last segment (e.g. `1.2.4.dev5`). | `"no-guess-dev"` |
+| `local-scheme` | `"node"`: include `+gREV`. `"no-local-version"`: strip local part (required for PyPI). | `"node"` |
+| `write-to` | Path to write resolved version as `__version__ = "..."` before building. | (none) |
 
 ### License files (PEP 639)
 
