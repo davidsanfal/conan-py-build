@@ -1,7 +1,7 @@
 import ast
 import io
 import os
-import re
+
 import shutil
 import subprocess
 import tarfile
@@ -13,6 +13,7 @@ from typing import List, Optional, Tuple
 from conan.api.conan_api import ConanAPI
 from conan.cli.cli import Cli
 from conan.tools.env import VirtualBuildEnv
+from conan.tools.scm import Version
 from distlib.wheel import Wheel
 from packaging.tags import sys_tags
 from packaging.utils import canonicalize_name
@@ -98,6 +99,14 @@ def _read_version_from_file(path: Path) -> Optional[str]:
             return None
     return None
 
+def _is_git_hash(s: str) -> bool:
+    """Return True if *s* looks like an abbreviated git commit hash (>= 7 hex chars)."""
+    try:
+        return len(s) >= 7 and int(s, 16) >= 0
+    except ValueError:
+        return False
+
+
 def _parse_git_describe(
     desc: str,
     version_scheme: str = "no-guess-dev",
@@ -122,24 +131,31 @@ def _parse_git_describe(
     """
     if not desc or not desc.strip():
         return None
-    desc = desc.strip()
+    desc = desc.strip().lstrip("v")
     guess = version_scheme == "guess-next-dev"
     local = local_scheme != "no-local-version"
 
-    # "v1.2.3-5-gabcdef0" or "v1.2.3-0-gabcdef0-dirty"
-    m = re.match(r"^v?(.+?)-(\d+)-g([a-f0-9]+)(?:-dirty)?$", desc)
-    if m:
-        tag, n, rev = m.group(1).lstrip("v"), int(m.group(2)), m.group(3)[:7]
-        if n == 0 and "-dirty" not in desc:
-            return tag
-    # "abcdef0" or "abcdef0-dirty" (no tags in history)
-    elif re.fullmatch(r"[a-f0-9]{7,40}(?:-dirty)?", desc):
-        tag, n, rev = "0.0.0", 0, desc.split("-")[0][:7]
-    # Bare tag like "v1.2.3" or "1.2.3"
-    else:
-        return desc.lstrip("v") or None
+    dirty = "-dirty" in desc
+    desc = desc.replace("-dirty", "")
 
-    base = re.sub(r"(\d+)$", lambda m: str(int(m.group()) + 1), tag) if guess else tag
+    v = Version(desc)
+    pre = str(v.pre) if v.pre else ""
+
+    if "-g" in pre:
+        # Tagged: "1.2.3-5-gabcdef0" → pre="5-gabcdef0"
+        tag = ".".join(str(s) for s in v.main)
+        n_str, rev = pre.split("-g", 1)
+        n = int(n_str)
+        if n == 0 and not dirty:
+            return tag
+    elif len(v.main) == 1 and _is_git_hash(str(v.major)):
+        # Hash-only: "abcdef0" (no tags in history)
+        tag, n, rev = "0.0.0", 0, str(v.major)
+    else:
+        # Bare tag: "1.2.3"
+        return desc or None
+
+    base = str(Version(tag).bump(len(tag.split(".")) - 1)) if guess else tag
     suffix = f"+g{rev}" if local else ""
     return f"{base}.dev{n}{suffix}"
 
