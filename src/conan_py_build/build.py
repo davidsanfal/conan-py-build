@@ -98,51 +98,50 @@ def _read_version_from_file(path: Path) -> Optional[str]:
             return None
     return None
 
-def _bump_last_segment(tag: str) -> str:
-    """Increment the last numeric segment of a version string (guess-next-dev)."""
-    parts = tag.rsplit(".", 1)
-    if len(parts) == 2 and parts[1].isdigit():
-        return f"{parts[0]}.{int(parts[1]) + 1}"
-    if parts[0].isdigit():
-        return str(int(parts[0]) + 1)
-    return tag
-
-
 def _parse_git_describe(
     desc: str,
     version_scheme: str = "no-guess-dev",
     local_scheme: str = "node",
 ) -> Optional[str]:
     """
-    Parse git describe output into a PEP 440 version.
+    Parse ``git describe --tags --dirty --always --long`` output into a PEP 440 version.
 
-    version_scheme:
-        "no-guess-dev" (default) - keep the tag version as-is for dev builds (e.g. 1.2.3.dev5)
-        "guess-next-dev"         - bump the last numeric segment (e.g. 1.2.3 -> 1.2.4.dev5)
-    local_scheme:
-        "node" (default)         - include +gREV local part
-        "no-local-version"       - strip local part (required for PyPI)
+    git describe produces three formats:
+      - "v1.2.3-5-gabcdef0"       → tagged: 5 commits after tag v1.2.3, at commit abcdef0
+      - "v1.2.3-0-gabcdef0"       → exactly on tag v1.2.3
+      - "abcdef0"                  → no tags in history, just a commit hash
+    Any of them may end with "-dirty" if the working tree has uncommitted changes.
+
+    version_scheme controls dev version numbering:
+      - "no-guess-dev":  keep tag as base           (v1.2.3 + 5 commits → 1.2.3.dev5)
+      - "guess-next-dev": bump last numeric segment  (v1.2.3 + 5 commits → 1.2.4.dev5)
+
+    local_scheme controls the +gREV suffix:
+      - "node":             include it   (1.2.3.dev5+gabcdef0)
+      - "no-local-version": strip it     (1.2.3.dev5) — required for PyPI uploads
     """
     if not desc or not desc.strip():
         return None
     desc = desc.strip()
     guess = version_scheme == "guess-next-dev"
-    no_local = local_scheme == "no-local-version"
+    local = local_scheme != "no-local-version"
 
+    # "v1.2.3-5-gabcdef0" or "v1.2.3-0-gabcdef0-dirty"
     m = re.match(r"^v?(.+?)-(\d+)-g([a-f0-9]+)(?:-dirty)?$", desc)
     if m:
         tag, n, rev = m.group(1).lstrip("v"), int(m.group(2)), m.group(3)[:7]
         if n == 0 and "-dirty" not in desc:
             return tag
-        base = _bump_last_segment(tag) if guess else tag
-        return f"{base}.dev{n}" if no_local else f"{base}.dev{n}+g{rev}"
+    # "abcdef0" or "abcdef0-dirty" (no tags in history)
+    elif re.fullmatch(r"[a-f0-9]{7,40}(?:-dirty)?", desc):
+        tag, n, rev = "0.0.0", 0, desc.split("-")[0][:7]
+    # Bare tag like "v1.2.3" or "1.2.3"
+    else:
+        return desc.lstrip("v") or None
 
-    if re.fullmatch(r"[a-f0-9]{7,40}(?:-dirty)?", desc):
-        rev = desc.split("-")[0][:7]
-        base = "0.0.1" if guess else "0.0.0"
-        return f"{base}.dev0" if no_local else f"{base}.dev0+g{rev}"
-
-    return desc.lstrip("v") or None
+    base = re.sub(r"(\d+)$", lambda m: str(int(m.group()) + 1), tag) if guess else tag
+    suffix = f"+g{rev}" if local else ""
+    return f"{base}.dev{n}{suffix}"
 
 
 def _get_version_from_scm(source_dir: Path, version_scheme: str = "no-guess-dev",
@@ -225,11 +224,19 @@ def _get_version_from_config(source_dir: Path) -> Optional[str]:
         scm_config = tool.get("version-scm", {})
         if not isinstance(scm_config, dict):
             scm_config = {}
-        return _get_version_from_scm(
-            source_dir,
-            scm_config.get("version-scheme", "no-guess-dev"),
-            scm_config.get("local-scheme", "node"),
-        )
+        valid_version_schemes = ("no-guess-dev", "guess-next-dev")
+        valid_local_schemes = ("node", "no-local-version")
+        version_scheme = scm_config.get("version-scheme", "no-guess-dev")
+        local_scheme = scm_config.get("local-scheme", "node")
+        if version_scheme not in valid_version_schemes:
+            raise RuntimeError(
+                f"Unknown version-scheme: {version_scheme!r}. Use one of {valid_version_schemes}."
+            )
+        if local_scheme not in valid_local_schemes:
+            raise RuntimeError(
+                f"Unknown local-scheme: {local_scheme!r}. Use one of {valid_local_schemes}."
+            )
+        return _get_version_from_scm(source_dir, version_scheme, local_scheme)
 
     raise RuntimeError(
         f'Unknown version strategy: {strategy!r}. Use "version-file" or "version-scm".'

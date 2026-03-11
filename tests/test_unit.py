@@ -6,7 +6,6 @@ import pytest
 from conan.errors import ConanException
 
 from conan_py_build.build import (
-    _bump_last_segment,
     _parse_config,
     _parse_git_describe,
     _read_version_from_file,
@@ -109,15 +108,6 @@ def test_read_version_from_file_missing_returns_none(tmp_path):
 def test_parse_git_describe(desc, expected):
     assert _parse_git_describe(desc) == expected
 
-
-@pytest.mark.parametrize("version,expected", [
-    ("1.2.3", "1.2.4"),
-    ("1.0", "1.1"),
-    ("3", "4"),
-    ("0.0.0", "0.0.1"),
-])
-def test_bump_last_segment(version, expected):
-    assert _bump_last_segment(version) == expected
 
 
 @pytest.mark.parametrize("desc,expected", [
@@ -222,6 +212,48 @@ version = "unknown-strategy"
 """, encoding="utf-8")
     meta = {"name": "pkg", "dynamic": ["version"]}
     with pytest.raises(RuntimeError, match="Unknown version strategy"):
+        _resolve_version(meta, tmp_path)
+
+
+def test_resolve_version_invalid_version_scheme_raises(tmp_path):
+    (tmp_path / "pyproject.toml").write_text("""[project]
+name = "pkg"
+dynamic = ["version"]
+description = "Test"
+
+[build-system]
+requires = ["conan-py-build"]
+build-backend = "conan_py_build.build"
+
+[tool.conan-py-build]
+version = "version-scm"
+
+[tool.conan-py-build.version-scm]
+version-scheme = "invalid"
+""", encoding="utf-8")
+    meta = {"name": "pkg", "dynamic": ["version"]}
+    with pytest.raises(RuntimeError, match="Unknown version-scheme"):
+        _resolve_version(meta, tmp_path)
+
+
+def test_resolve_version_invalid_local_scheme_raises(tmp_path):
+    (tmp_path / "pyproject.toml").write_text("""[project]
+name = "pkg"
+dynamic = ["version"]
+description = "Test"
+
+[build-system]
+requires = ["conan-py-build"]
+build-backend = "conan_py_build.build"
+
+[tool.conan-py-build]
+version = "version-scm"
+
+[tool.conan-py-build.version-scm]
+local-scheme = "invalid"
+""", encoding="utf-8")
+    meta = {"name": "pkg", "dynamic": ["version"]}
+    with pytest.raises(RuntimeError, match="Unknown local-scheme"):
         _resolve_version(meta, tmp_path)
 
 
