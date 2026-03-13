@@ -98,6 +98,7 @@ jobs:
         run: pip install -e .
       - name: Build wheels
         run: |
+          pip install setuptools-scm
           pip wheel examples/basic --no-build-isolation -w examples/basic/dist/ -vv
           pip wheel examples/basic-scm --no-build-isolation -w examples/basic-scm/dist/ -vv
           pip wheel examples/basic-pybind11 --no-build-isolation -w examples/basic-pybind11/dist/ -vv
