@@ -119,19 +119,18 @@ def _resolve_conanfile_path(conanfile_path: str, source_dir: Path) -> Path:
 
 
 def _get_version_provider(source_dir: Path) -> Optional[str]:
-    """Read [tool.conan-py-build].version — 'setuptools_scm' or 'file', or None."""
-    tool = _get_tool_config(source_dir)
-    provider = tool.get("version")
+    """Read [tool.conan-py-build.version].provider — 'file' or 'setuptools_scm', or None."""
+    provider = _get_tool_config(source_dir).get("version", {}).get("provider")
     if provider is not None and provider not in ("setuptools_scm", "file"):
         raise RuntimeError(
-            f"[tool.conan-py-build].version must be 'setuptools_scm' or 'file', "
+            f"[tool.conan-py-build.version].provider must be 'setuptools_scm' or 'file', "
             f"got {provider!r}"
         )
     return provider
 
 def _get_version_from_file(source_dir: Path) -> Optional[str]:
-    """Read __version__ from the path in [tool.version].file."""
-    version_file = _read_pyproject(source_dir).get("tool", {}).get("version", {}).get("file")
+    """Read __version__ from the path in [tool.conan-py-build.version].file."""
+    version_file = _get_tool_config(source_dir).get("version", {}).get("file")
     if not version_file:
         return None
     resolved = (source_dir / version_file).resolve()
@@ -139,7 +138,7 @@ def _get_version_from_file(source_dir: Path) -> Optional[str]:
         resolved.relative_to(source_dir.resolve())
     except ValueError:
         raise RuntimeError(
-            f"[tool.version].file must be inside project: {version_file!r}"
+            f"[tool.conan-py-build.version].file must be inside project: {version_file!r}"
         )
     return _read_version_from_file(resolved)
 
@@ -147,19 +146,19 @@ def _get_version_from_file(source_dir: Path) -> Optional[str]:
 def _get_version_from_scm(source_dir: Path) -> str:
     """Get version from setuptools-scm using VCS tags.
 
-    Reads [tool.setuptools_scm] from pyproject.toml and forwards recognised
-    keys (root, local_scheme, version_scheme, fallback_version) to
-    setuptools_scm.get_version().
+    Reads [tool.conan-py-build.version.setuptools_scm] from pyproject.toml and
+    forwards recognised keys (root, local_scheme, version_scheme,
+    fallback_version) to setuptools_scm.get_version().
     """
     try:
         from setuptools_scm import get_version
     except ImportError:
         raise RuntimeError(
-            "setuptools-scm is required when version = 'setuptools_scm'. "
+            "setuptools-scm is required when provider = 'setuptools_scm'. "
             "Add 'setuptools-scm' to [build-system].requires."
         )
 
-    scm_config = _read_pyproject(source_dir).get("tool", {}).get("setuptools_scm", {})
+    scm_config = _get_tool_config(source_dir).get("version", {}).get("setuptools_scm", {})
     kwargs = {"root": str((source_dir / scm_config.get("root", ".")).resolve())}
     for key in ("local_scheme", "version_scheme", "fallback_version"):
         if key in scm_config:
@@ -182,7 +181,7 @@ def _resolve_version(project_metadata: dict, source_dir: Path) -> str:
         if version_is_dynamic and not version:
             raise RuntimeError(
                 "dynamic = [\"version\"] but version could not be resolved. "
-                "Set [tool.conan-py-build] version = 'setuptools_scm' or 'file'."
+                "Set [tool.conan-py-build.version] provider = 'setuptools_scm' or 'file'."
             )
 
     version = version or "0.0.0"
@@ -588,7 +587,7 @@ def build_sdist(sdist_directory: str, config_settings: Optional[dict] = None) ->
     default_include.append(resolved_conanfile.relative_to(source_dir).as_posix())
 
     if _get_version_provider(source_dir) == "setuptools_scm":
-        scm_cfg = _read_pyproject(source_dir).get("tool", {}).get("version", {}).get("setuptools_scm", {})
+        scm_cfg = _get_tool_config(source_dir).get("version", {}).get("setuptools_scm", {})
         scm_write_to = scm_cfg.get("write_to") if isinstance(scm_cfg, dict) else None
         if scm_write_to:
             default_include.append(scm_write_to)

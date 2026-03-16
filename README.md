@@ -76,7 +76,9 @@ Configure in `pyproject.toml` under `[tool.conan-py-build]`:
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `version` | Version provider: `"file"` or `"setuptools_scm"` (see [Dynamic version](#dynamic-version)) | (none) |
+| `version.provider` | Version provider: `"file"` or `"setuptools_scm"` (see [Dynamic version](#dynamic-version)) | (none) |
+| `version.file` | Path to a Python file containing `__version__ = "x.y.z"` (used when `provider = "file"`) | (none) |
+| `version.setuptools_scm.write_to` | Path to write the generated version file for inclusion in the sdist (used when `provider = "setuptools_scm"`) | (none) |
 | `conanfile-path` | Path to the Conan recipe (directory containing `conanfile.py` or path to the file), relative to project root | `"."` (project root) |
 | `wheel.packages` | List of paths (relative to project root) of Python packages to include in the wheel; each must be a directory with `__init__.py` | `["src/<normalized_project_name>"]` |
 | `sdist.include` | List of paths or patterns to add to the sdist | `[]` |
@@ -85,27 +87,24 @@ Configure in `pyproject.toml` under `[tool.conan-py-build]`:
 
 ### Dynamic version
 
-Set `dynamic = ["version"]` in `[project]` (no `version` key) and choose a provider via `[tool.conan-py-build].version`:
+Set `dynamic = ["version"]` in `[project]` (no `version` key) and configure the provider in `[tool.conan-py-build.version]`:
 
 **From a file** — reads `__version__ = "x.y.z"` from a Python file:
 
 ```toml
-[tool.conan-py-build]
-version = "file"
-
-[tool.version]
+[tool.conan-py-build.version]
+provider = "file"
 file = "src/mypackage/__init__.py"
 ```
 
 **From git tags (setuptools-scm)** — resolves version from VCS tags (e.g. `v1.0.0` → `1.0.0`):
 
 ```toml
-[tool.conan-py-build]
-version = "setuptools_scm"
+[tool.conan-py-build.version]
+provider = "setuptools_scm"
 ```
 
-The backend reads `[tool.setuptools_scm]` and forwards the following options to
-`setuptools_scm.get_version()`:
+All setuptools-scm options are configured in `[tool.conan-py-build.version.setuptools_scm]`:
 
 | Option | Description | Default |
 |--------|-------------|---------|
@@ -113,11 +112,12 @@ The backend reads `[tool.setuptools_scm]` and forwards the following options to
 | `version_scheme` | How the version string is constructed between tags. Common values: `"guess-next-dev"`, `"post-release"`, `"calver-by-date"`. | `setuptools-scm` default (`"guess-next-dev"`) |
 | `fallback_version` | Static version string used when SCM metadata is unavailable (e.g. building from a tarball without `.git`). | (none — raises error) |
 | `root` | Path to the SCM root relative to `pyproject.toml`. Only needed when the project lives in a subdirectory of the repository (e.g. monorepos). | `"."` (same directory) |
+| `write_to` | Path to write the generated version file, so it is included in the sdist for builds without `.git`. | (none) |
 
 Example with `local_scheme` and `fallback_version`:
 
 ```toml
-[tool.setuptools_scm]
+[tool.conan-py-build.version.setuptools_scm]
 local_scheme = "no-local-version"
 fallback_version = "0.0.0"
 ```
@@ -125,15 +125,8 @@ fallback_version = "0.0.0"
 Example for a monorepo where `.git` is one level up:
 
 ```toml
-[tool.setuptools_scm]
+[tool.conan-py-build.version.setuptools_scm]
 root = ".."
-```
-
-Optionally, set `write_to` to include the generated version file in the sdist:
-
-```toml
-[tool.version.setuptools_scm]
-write_to = "src/mypackage/_version.py"
 ```
 
 ### License files (PEP 639)

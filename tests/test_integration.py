@@ -153,7 +153,7 @@ def test_build_wheel_with_profile_autodetect(integration_project, monkeypatch):
 
 
 def test_build_sdist_version_file(tmp_path, monkeypatch):
-    """Integration: build_sdist resolves dynamic version from [tool.version].file."""
+    """Integration: build_sdist resolves dynamic version from [tool.conan-py-build.version].file."""
     proj = tmp_path / "proj"
     proj.mkdir()
     (proj / "pyproject.toml").write_text("""[project]
@@ -165,10 +165,8 @@ description = "Test"
 requires = ["conan-py-build"]
 build-backend = "conan_py_build.build"
 
-[tool.conan-py-build]
-version = "file"
-
-[tool.version]
+[tool.conan-py-build.version]
+provider = "file"
 file = "src/file_ver_pkg/__init__.py"
 """, encoding="utf-8")
     (proj / "conanfile.py").write_text("""from conan import ConanFile
@@ -212,10 +210,10 @@ description = "Test"
 requires = ["conan-py-build"]
 build-backend = "conan_py_build.build"
 
-[tool.conan-py-build]
-version = "setuptools_scm"
+[tool.conan-py-build.version]
+provider = "setuptools_scm"
 
-[tool.version.setuptools_scm]
+[tool.conan-py-build.version.setuptools_scm]
 write_to = "src/scm_ver_pkg/_version.py"
 """, encoding="utf-8")
     (proj / "conanfile.py").write_text("""from conan import ConanFile
@@ -268,10 +266,10 @@ description = "Test local_scheme"
 requires = ["conan-py-build"]
 build-backend = "conan_py_build.build"
 
-[tool.conan-py-build]
-version = "setuptools_scm"
+[tool.conan-py-build.version]
+provider = "setuptools_scm"
 
-[tool.setuptools_scm]
+[tool.conan-py-build.version.setuptools_scm]
 local_scheme = "no-local-version"
 """, encoding="utf-8")
     (proj / "conanfile.py").write_text("""\
@@ -337,10 +335,10 @@ description = "Test root"
 requires = ["conan-py-build"]
 build-backend = "conan_py_build.build"
 
-[tool.conan-py-build]
-version = "setuptools_scm"
+[tool.conan-py-build.version]
+provider = "setuptools_scm"
 
-[tool.setuptools_scm]
+[tool.conan-py-build.version.setuptools_scm]
 root = ".."
 """, encoding="utf-8")
     (proj / "conanfile.py").write_text("""\

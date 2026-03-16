@@ -21,7 +21,7 @@ It demonstrates every `setuptools-scm` option supported by the backend:
 | Version source | `version = "0.1.0"` (static) | `dynamic = ["version"]` + Git tags |
 | Build requires | `conan-py-build` | `conan-py-build` + `setuptools-scm` |
 | `__init__.py` | `__version__ = "0.1.0"` | Imports from `_version.py` with `"0.0.0"` fallback |
-| SCM config | (none) | `[tool.setuptools_scm]` + `[tool.version.setuptools_scm]` |
+| SCM config | (none) | `[tool.conan-py-build.version.setuptools_scm]` |
 
 ## pyproject.toml highlights
 
@@ -36,15 +36,15 @@ dynamic = ["version"]            # no static version key
 
 [tool.conan-py-build]
 conanfile-path = "conan"
-version = "setuptools_scm"       # tells the backend to use setuptools-scm
 
-[tool.setuptools_scm]
+[tool.conan-py-build.version]
+provider = "setuptools_scm"       # tells the backend to use setuptools-scm
+
+[tool.conan-py-build.version.setuptools_scm]
 version_scheme = "guess-next-dev"
 local_scheme = "no-local-version"
 fallback_version = "0.0.0"
 root = "."
-
-[tool.version.setuptools_scm]
 write_to = "src/myadder_scm/_version.py"
 ```
 
@@ -87,6 +87,6 @@ If the project lives inside a subdirectory of a larger repository, change
 `root` to point to the Git root:
 
 ```toml
-[tool.setuptools_scm]
+[tool.conan-py-build.version.setuptools_scm]
 root = ".."
 ```

@@ -43,8 +43,9 @@ description = "Test"
 requires = ["conan-py-build"]
 build-backend = "conan_py_build.build"
 
-[tool.conan-py-build]
-version = "file"
+[tool.conan-py-build.version]
+provider = "file"
+file = "python/myadder/__init__.py"
 
 [tool.conan-py-build.wheel]
 packages = ["python/myadder", "src/extra_utils"]
@@ -52,9 +53,6 @@ packages = ["python/myadder", "src/extra_utils"]
 [tool.conan-py-build.sdist]
 include = ["docs"]
 exclude = ["README.md"]
-
-[tool.version]
-file = "python/myadder/__init__.py"
 """, encoding="utf-8")
     init_py = path / "python" / "myadder" / "__init__.py"
     init_py.parent.mkdir(parents=True)
@@ -255,8 +253,8 @@ description = "Test"
 requires = ["conan-py-build"]
 build-backend = "conan_py_build.build"
 
-[tool.conan-py-build]
-version = "invalid"
+[tool.conan-py-build.version]
+provider = "invalid"
 """, encoding="utf-8")
     with pytest.raises(RuntimeError, match="must be 'setuptools_scm' or 'file'"):
         _get_version_provider(tmp_path)

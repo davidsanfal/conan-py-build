@@ -10,13 +10,13 @@ requires-python = ">=3.8"
 
 [tool.conan-py-build]
 conanfile-path = "conan"
-version = "setuptools_scm"
 
-[tool.setuptools_scm]
+[tool.conan-py-build.version]
+provider = "setuptools_scm"
+
+[tool.conan-py-build.version.setuptools_scm]
 version_scheme = "guess-next-dev"
 local_scheme = "no-local-version"
 fallback_version = "0.0.0"
 root = "."
-
-[tool.version.setuptools_scm]
 write_to = "src/myadder_scm/_version.py"
