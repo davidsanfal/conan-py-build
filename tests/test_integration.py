@@ -213,7 +213,7 @@ build-backend = "conan_py_build.build"
 [tool.conan-py-build.version]
 provider = "setuptools_scm"
 
-[tool.conan-py-build.version.setuptools_scm]
+[tool.setuptools_scm]
 version_file = "src/scm_ver_pkg/_version.py"
 """, encoding="utf-8")
     (proj / "conanfile.py").write_text("""from conan import ConanFile
@@ -251,6 +251,13 @@ class Pkg(ConanFile):
     filename = build_sdist(str(sdist_dir))
     assert filename == "scm-ver-pkg-3.0.0.tar.gz"
 
+    with tarfile.open(sdist_dir / filename, "r:gz") as tar:
+        names = sorted(tar.getnames())
+        assert "scm-ver-pkg-3.0.0/pyproject.toml" in names
+        assert "scm-ver-pkg-3.0.0/src/scm_ver_pkg/__init__.py" in names
+        assert "scm-ver-pkg-3.0.0/src/scm_ver_pkg/_version.py" in names
+        assert "scm-ver-pkg-3.0.0/PKG-INFO" in names
+
 
 def test_build_sdist_version_scm_local_scheme(tmp_path, monkeypatch):
     """Integration: local_scheme = 'no-local-version' strips the +gHASH suffix."""
@@ -269,7 +276,7 @@ build-backend = "conan_py_build.build"
 [tool.conan-py-build.version]
 provider = "setuptools_scm"
 
-[tool.conan-py-build.version.setuptools_scm]
+[tool.setuptools_scm]
 local_scheme = "no-local-version"
 """, encoding="utf-8")
     (proj / "conanfile.py").write_text("""\
@@ -338,7 +345,7 @@ build-backend = "conan_py_build.build"
 [tool.conan-py-build.version]
 provider = "setuptools_scm"
 
-[tool.conan-py-build.version.setuptools_scm]
+[tool.setuptools_scm]
 root = ".."
 """, encoding="utf-8")
     (proj / "conanfile.py").write_text("""\

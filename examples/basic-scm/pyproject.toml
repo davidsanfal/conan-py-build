@@ -14,7 +14,7 @@ conanfile-path = "conan"
 [tool.conan-py-build.version]
 provider = "setuptools_scm"
 
-[tool.conan-py-build.version.setuptools_scm]
+[tool.setuptools_scm]
 version_scheme = "guess-next-dev"
 local_scheme = "no-local-version"
 fallback_version = "0.0.0"

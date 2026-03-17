@@ -146,8 +146,8 @@ def _get_version_from_file(source_dir: Path) -> Optional[str]:
 def _get_version_from_scm(source_dir: Path) -> str:
     """Get version from setuptools-scm using VCS tags.
 
-    Reads [tool.conan-py-build.version.setuptools_scm] from pyproject.toml and
-    forwards recognised keys to setuptools_scm.get_version().
+    Reads [tool.setuptools_scm] from pyproject.toml and forwards all options
+    to setuptools_scm.get_version().
     """
     try:
         from setuptools_scm import get_version
@@ -157,13 +157,8 @@ def _get_version_from_scm(source_dir: Path) -> str:
             "Add 'setuptools-scm' to [build-system].requires."
         )
 
-    scm_config = _get_tool_config(source_dir).get("version", {}).get("setuptools_scm", {})
-    kwargs = {"relative_to": str(source_dir / "pyproject.toml")}
-    for key in ("root", "local_scheme", "version_scheme", "fallback_version", "version_file"):
-        if key in scm_config:
-            kwargs[key] = scm_config[key]
-
-    return get_version(**kwargs)
+    scm_config = _read_pyproject(source_dir).get("tool", {}).get("setuptools_scm", {})
+    return get_version(relative_to=str(source_dir / "pyproject.toml"), **scm_config)
 
 
 def _resolve_version(project_metadata: dict, source_dir: Path) -> str:
@@ -586,7 +581,7 @@ def build_sdist(sdist_directory: str, config_settings: Optional[dict] = None) ->
     default_include.append(resolved_conanfile.relative_to(source_dir).as_posix())
 
     if _get_version_provider(source_dir) == "setuptools_scm":
-        version_file = _get_tool_config(source_dir).get("version", {}).get("setuptools_scm", {}).get("version_file")
+        version_file = _read_pyproject(source_dir).get("tool", {}).get("setuptools_scm", {}).get("version_file")
         if version_file:
             default_include.append(version_file)
 

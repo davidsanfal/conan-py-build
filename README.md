@@ -103,30 +103,8 @@ file = "src/mypackage/__init__.py"
 provider = "setuptools_scm"
 ```
 
-All setuptools-scm options are configured in `[tool.conan-py-build.version.setuptools_scm]`:
-
-| Option | Description | Default |
-|--------|-------------|---------|
-| `local_scheme` | Controls the local part of the version (after `+`). Set to `"no-local-version"` to strip the `+gHASH` suffix, which is required for PyPI uploads. | `setuptools-scm` default (`"node-and-date"`) |
-| `version_scheme` | How the version string is constructed between tags. Common values: `"guess-next-dev"`, `"post-release"`, `"calver-by-date"`. | `setuptools-scm` default (`"guess-next-dev"`) |
-| `fallback_version` | Static version string used when SCM metadata is unavailable (e.g. building from a tarball without `.git`). | (none — raises error) |
-| `root` | Path to the SCM root relative to `pyproject.toml`. Only needed when the project lives in a subdirectory of the repository (e.g. monorepos). | `"."` (same directory) |
-| `version_file` | Path to write the generated version file, so it is included in the sdist for builds without `.git`. | (none) |
-
-Example with `local_scheme` and `fallback_version`:
-
-```toml
-[tool.conan-py-build.version.setuptools_scm]
-local_scheme = "no-local-version"
-fallback_version = "0.0.0"
-```
-
-Example for a monorepo where `.git` is one level up:
-
-```toml
-[tool.conan-py-build.version.setuptools_scm]
-root = ".."
-```
+The `setuptools-scm` options are configured in `[tool.setuptools_scm]` — see the
+[setuptools-scm docs](https://setuptools-scm.readthedocs.io/) for available options.
 
 ### License files (PEP 639)
 
