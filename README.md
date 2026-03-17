@@ -78,7 +78,6 @@ Configure in `pyproject.toml` under `[tool.conan-py-build]`:
 |--------|-------------|---------|
 | `version.provider` | Version provider: `"file"` or `"setuptools_scm"` (see [Dynamic version](#dynamic-version)) | (none) |
 | `version.file` | Path to a Python file containing `__version__ = "x.y.z"` (used when `provider = "file"`) | (none) |
-| `version.setuptools_scm.write_to` | Path to write the generated version file for inclusion in the sdist (used when `provider = "setuptools_scm"`) | (none) |
 | `conanfile-path` | Path to the Conan recipe (directory containing `conanfile.py` or path to the file), relative to project root | `"."` (project root) |
 | `wheel.packages` | List of paths (relative to project root) of Python packages to include in the wheel; each must be a directory with `__init__.py` | `["src/<normalized_project_name>"]` |
 | `sdist.include` | List of paths or patterns to add to the sdist | `[]` |
@@ -112,7 +111,7 @@ All setuptools-scm options are configured in `[tool.conan-py-build.version.setup
 | `version_scheme` | How the version string is constructed between tags. Common values: `"guess-next-dev"`, `"post-release"`, `"calver-by-date"`. | `setuptools-scm` default (`"guess-next-dev"`) |
 | `fallback_version` | Static version string used when SCM metadata is unavailable (e.g. building from a tarball without `.git`). | (none — raises error) |
 | `root` | Path to the SCM root relative to `pyproject.toml`. Only needed when the project lives in a subdirectory of the repository (e.g. monorepos). | `"."` (same directory) |
-| `write_to` | Path to write the generated version file, so it is included in the sdist for builds without `.git`. | (none) |
+| `version_file` | Path to write the generated version file, so it is included in the sdist for builds without `.git`. | (none) |
 
 Example with `local_scheme` and `fallback_version`:
 

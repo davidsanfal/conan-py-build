@@ -214,7 +214,7 @@ build-backend = "conan_py_build.build"
 provider = "setuptools_scm"
 
 [tool.conan-py-build.version.setuptools_scm]
-write_to = "src/scm_ver_pkg/_version.py"
+version_file = "src/scm_ver_pkg/_version.py"
 """, encoding="utf-8")
     (proj / "conanfile.py").write_text("""from conan import ConanFile
 from conan.tools.cmake import cmake_layout

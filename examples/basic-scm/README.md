@@ -12,7 +12,7 @@ It demonstrates every `setuptools-scm` option supported by the backend:
 | `local_scheme` | `"no-local-version"` | Strips the `+gHASH` local suffix — required for PyPI uploads. |
 | `fallback_version` | `"0.0.0"` | Used when Git metadata is unavailable (e.g. building from a tarball). |
 | `root` | `"."` | Path to the SCM root relative to `pyproject.toml`. Change to `".."` in a monorepo. |
-| `write_to` | `"src/myadder_scm/_version.py"` | Includes the generated `_version.py` in the sdist so downstream builds without `.git` still have a version. |
+| `version_file` | `"src/myadder_scm/_version.py"` | Generates `_version.py` so builds without `.git` still have a version. |
 
 ## Key differences from `basic`
 
@@ -45,7 +45,7 @@ version_scheme = "guess-next-dev"
 local_scheme = "no-local-version"
 fallback_version = "0.0.0"
 root = "."
-write_to = "src/myadder_scm/_version.py"
+version_file = "src/myadder_scm/_version.py"
 ```
 
 ## Build and Install

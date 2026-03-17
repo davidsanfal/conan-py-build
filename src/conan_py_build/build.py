@@ -147,8 +147,7 @@ def _get_version_from_scm(source_dir: Path) -> str:
     """Get version from setuptools-scm using VCS tags.
 
     Reads [tool.conan-py-build.version.setuptools_scm] from pyproject.toml and
-    forwards recognised keys (root, local_scheme, version_scheme,
-    fallback_version) to setuptools_scm.get_version().
+    forwards recognised keys to setuptools_scm.get_version().
     """
     try:
         from setuptools_scm import get_version
@@ -159,8 +158,8 @@ def _get_version_from_scm(source_dir: Path) -> str:
         )
 
     scm_config = _get_tool_config(source_dir).get("version", {}).get("setuptools_scm", {})
-    kwargs = {"root": str((source_dir / scm_config.get("root", ".")).resolve())}
-    for key in ("local_scheme", "version_scheme", "fallback_version"):
+    kwargs = {"relative_to": str(source_dir / "pyproject.toml")}
+    for key in ("root", "local_scheme", "version_scheme", "fallback_version", "version_file"):
         if key in scm_config:
             kwargs[key] = scm_config[key]
 
@@ -587,10 +586,9 @@ def build_sdist(sdist_directory: str, config_settings: Optional[dict] = None) ->
     default_include.append(resolved_conanfile.relative_to(source_dir).as_posix())
 
     if _get_version_provider(source_dir) == "setuptools_scm":
-        scm_cfg = _get_tool_config(source_dir).get("version", {}).get("setuptools_scm", {})
-        scm_write_to = scm_cfg.get("write_to") if isinstance(scm_cfg, dict) else None
-        if scm_write_to:
-            default_include.append(scm_write_to)
+        version_file = _get_tool_config(source_dir).get("version", {}).get("setuptools_scm", {}).get("version_file")
+        if version_file:
+            default_include.append(version_file)
 
     default_exclude = [
         "__pycache__",
