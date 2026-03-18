@@ -144,22 +144,21 @@ def _get_version_from_file(source_dir: Path) -> Optional[str]:
 
 
 def _get_version_from_scm(source_dir: Path) -> str:
-    """Get version from setuptools-scm using VCS tags.
-
-    Reads [tool.setuptools_scm] from pyproject.toml and forwards all options
-    to setuptools_scm.get_version().
-    """
+    """Get version from setuptools-scm."""
     try:
-        from setuptools_scm import get_version
+        from setuptools_scm import Configuration, _get_version
     except ImportError:
         raise RuntimeError(
             "setuptools-scm is required when provider = 'setuptools_scm'. "
             "Add 'setuptools-scm' to [build-system].requires."
         )
 
-    scm_config = _read_pyproject(source_dir).get("tool", {}).get("setuptools_scm", {})
-    scm_config.setdefault("relative_to", str(source_dir / "pyproject.toml"))
-    return get_version(**scm_config)
+    config = Configuration.from_file(str(source_dir / "pyproject.toml"))
+    try:
+        version = _get_version(config, force_write_version_files=True)
+    except TypeError:
+        version = _get_version(config)
+    return version
 
 
 def _resolve_version(project_metadata: dict, source_dir: Path) -> str:
