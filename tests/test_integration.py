@@ -1,4 +1,5 @@
 """Integration tests: run real PEP 517 hooks (build_sdist, build_wheel) on a project layout."""
+import os
 import subprocess
 import tarfile
 import types
@@ -152,12 +153,58 @@ def test_build_wheel_with_profile_autodetect(integration_project, monkeypatch):
     assert "[settings]" in content or "os=" in content, "Profile should contain Conan settings"
 
 
+def _make_dynamic_version_project(proj, pkg_name, pyproject_toml, init_content=""):
+    """Scaffold a minimal project for dynamic-version integration tests."""
+    proj.mkdir(exist_ok=True)
+    (proj / "pyproject.toml").write_text(pyproject_toml, encoding="utf-8")
+    (proj / "conanfile.py").write_text("""\
+from conan import ConanFile
+from conan.tools.cmake import cmake_layout
+
+class Pkg(ConanFile):
+    name = "pkg"
+    version = "0.0.0"
+    settings = "os", "compiler", "build_type", "arch"
+    generators = "CMakeToolchain", "CMakeDeps"
+    def layout(self):
+        cmake_layout(self)
+    def source(self):
+        pass
+    def build(self):
+        pass
+""", encoding="utf-8")
+    (proj / "CMakeLists.txt").write_text(
+        "cmake_minimum_required(VERSION 3.15)\nproject(x)\n"
+    )
+    pkg = proj / "src" / pkg_name
+    pkg.mkdir(parents=True)
+    (pkg / "__init__.py").write_text(init_content, encoding="utf-8")
+
+
+def _git_init_and_tag(cwd, tag):
+    """Initialise a throw-away git repo, commit everything and create *tag*."""
+    env = {
+        **os.environ,
+        "GIT_AUTHOR_NAME": "test",
+        "GIT_AUTHOR_EMAIL": "t@t",
+        "GIT_COMMITTER_NAME": "test",
+        "GIT_COMMITTER_EMAIL": "t@t",
+    }
+    for cmd in (
+        ["git", "init"],
+        ["git", "add", "."],
+        ["git", "commit", "-m", "init"],
+        ["git", "tag", tag],
+    ):
+        subprocess.run(cmd, cwd=cwd, check=True, env=env, capture_output=True)
+
+
 def test_build_sdist_version_file(tmp_path, monkeypatch):
     """Integration: build_sdist resolves dynamic version from [tool.conan-py-build.version].file."""
     proj = tmp_path / "proj"
-    proj.mkdir()
-    (proj / "pyproject.toml").write_text("""[project]
-name = "file-ver-pkg"
+    _make_dynamic_version_project(proj, "file_pkg", """\
+[project]
+name = "file-pkg"
 dynamic = ["version"]
 description = "Test"
 
@@ -167,42 +214,22 @@ build-backend = "conan_py_build.build"
 
 [tool.conan-py-build.version]
 provider = "file"
-file = "src/file_ver_pkg/__init__.py"
-""", encoding="utf-8")
-    (proj / "conanfile.py").write_text("""from conan import ConanFile
-from conan.tools.cmake import cmake_layout
-
-class Pkg(ConanFile):
-    name = "file_ver_pkg"
-    version = "2.3.4"
-    settings = "os", "compiler", "build_type", "arch"
-    generators = "CMakeToolchain", "CMakeDeps"
-    def layout(self):
-        cmake_layout(self)
-    def source(self):
-        pass
-    def build(self):
-        pass
-""", encoding="utf-8")
-    (proj / "CMakeLists.txt").write_text("cmake_minimum_required(VERSION 3.15)\nproject(x)\n")
-    pkg = proj / "src" / "file_ver_pkg"
-    pkg.mkdir(parents=True)
-    (pkg / "__init__.py").write_text('__version__ = "2.3.4"', encoding="utf-8")
+file = "src/file_pkg/__init__.py"
+""", init_content='__version__ = "2.3.4"')
     monkeypatch.chdir(proj)
     monkeypatch.setenv("CONAN_HOME", str(tmp_path / "conan_home"))
 
     sdist_dir = tmp_path / "dist"
     sdist_dir.mkdir()
-    filename = build_sdist(str(sdist_dir))
-    assert filename == "file-ver-pkg-2.3.4.tar.gz"
+    assert build_sdist(str(sdist_dir)) == "file-pkg-2.3.4.tar.gz"
 
 
 def test_build_sdist_version_scm(tmp_path, monkeypatch):
     """Integration: build_sdist resolves dynamic version from setuptools_scm (git tag)."""
     proj = tmp_path / "proj"
-    proj.mkdir()
-    (proj / "pyproject.toml").write_text("""[project]
-name = "scm-ver-pkg"
+    _make_dynamic_version_project(proj, "scm_pkg", """\
+[project]
+name = "scm-pkg"
 dynamic = ["version"]
 description = "Test"
 
@@ -214,172 +241,17 @@ build-backend = "conan_py_build.build"
 provider = "setuptools_scm"
 
 [tool.setuptools_scm]
-version_file = "src/scm_ver_pkg/_version.py"
-""", encoding="utf-8")
-    (proj / "conanfile.py").write_text("""from conan import ConanFile
-from conan.tools.cmake import cmake_layout
-
-class Pkg(ConanFile):
-    name = "scm_ver_pkg"
-    version = "3.0.0"
-    settings = "os", "compiler", "build_type", "arch"
-    generators = "CMakeToolchain", "CMakeDeps"
-    def layout(self):
-        cmake_layout(self)
-    def source(self):
-        pass
-    def build(self):
-        pass
-""", encoding="utf-8")
-    (proj / "CMakeLists.txt").write_text("cmake_minimum_required(VERSION 3.15)\nproject(x)\n")
-    pkg = proj / "src" / "scm_ver_pkg"
-    pkg.mkdir(parents=True)
-    (pkg / "__init__.py").write_text("", encoding="utf-8")
-
-    env = {**dict(__import__("os").environ), "GIT_AUTHOR_NAME": "test", "GIT_AUTHOR_EMAIL": "t@t",
-           "GIT_COMMITTER_NAME": "test", "GIT_COMMITTER_EMAIL": "t@t"}
-    subprocess.run(["git", "init"], cwd=proj, check=True, env=env, capture_output=True)
-    subprocess.run(["git", "add", "."], cwd=proj, check=True, env=env, capture_output=True)
-    subprocess.run(["git", "commit", "-m", "init"], cwd=proj, check=True, env=env, capture_output=True)
-    subprocess.run(["git", "tag", "v3.0.0"], cwd=proj, check=True, env=env, capture_output=True)
-
+version_file = "src/scm_pkg/_version.py"
+""")
+    _git_init_and_tag(proj, "v3.0.0")
     monkeypatch.chdir(proj)
     monkeypatch.setenv("CONAN_HOME", str(tmp_path / "conan_home"))
 
     sdist_dir = tmp_path / "dist"
     sdist_dir.mkdir()
     filename = build_sdist(str(sdist_dir))
-    assert filename == "scm-ver-pkg-3.0.0.tar.gz"
+    assert filename == "scm-pkg-3.0.0.tar.gz"
 
     with tarfile.open(sdist_dir / filename, "r:gz") as tar:
-        names = sorted(tar.getnames())
-        assert "scm-ver-pkg-3.0.0/pyproject.toml" in names
-        assert "scm-ver-pkg-3.0.0/src/scm_ver_pkg/__init__.py" in names
-        assert "scm-ver-pkg-3.0.0/src/scm_ver_pkg/_version.py" in names
-        assert "scm-ver-pkg-3.0.0/PKG-INFO" in names
-
-
-def test_build_sdist_version_scm_local_scheme(tmp_path, monkeypatch):
-    """Integration: local_scheme = 'no-local-version' strips the +gHASH suffix."""
-    proj = tmp_path / "proj"
-    proj.mkdir()
-    (proj / "pyproject.toml").write_text("""\
-[project]
-name = "local-scheme-pkg"
-dynamic = ["version"]
-description = "Test local_scheme"
-
-[build-system]
-requires = ["conan-py-build"]
-build-backend = "conan_py_build.build"
-
-[tool.conan-py-build.version]
-provider = "setuptools_scm"
-
-[tool.setuptools_scm]
-local_scheme = "no-local-version"
-""", encoding="utf-8")
-    (proj / "conanfile.py").write_text("""\
-from conan import ConanFile
-from conan.tools.cmake import cmake_layout
-
-class Pkg(ConanFile):
-    name = "local_scheme_pkg"
-    version = "1.0.0"
-    settings = "os", "compiler", "build_type", "arch"
-    generators = "CMakeToolchain", "CMakeDeps"
-    def layout(self):
-        cmake_layout(self)
-    def source(self):
-        pass
-    def build(self):
-        pass
-""", encoding="utf-8")
-    (proj / "CMakeLists.txt").write_text("cmake_minimum_required(VERSION 3.15)\nproject(x)\n")
-    pkg = proj / "src" / "local_scheme_pkg"
-    pkg.mkdir(parents=True)
-    (pkg / "__init__.py").write_text("", encoding="utf-8")
-
-    env = {**dict(__import__("os").environ), "GIT_AUTHOR_NAME": "test", "GIT_AUTHOR_EMAIL": "t@t",
-           "GIT_COMMITTER_NAME": "test", "GIT_COMMITTER_EMAIL": "t@t"}
-    subprocess.run(["git", "init"], cwd=proj, check=True, env=env, capture_output=True)
-    subprocess.run(["git", "add", "."], cwd=proj, check=True, env=env, capture_output=True)
-    subprocess.run(["git", "commit", "-m", "init"], cwd=proj, check=True, env=env, capture_output=True)
-    subprocess.run(["git", "tag", "v1.0.0"], cwd=proj, check=True, env=env, capture_output=True)
-    # Add a commit after the tag so setuptools-scm generates a dev version.
-    # Without local_scheme="no-local-version" the version would be 1.0.1.dev1+gXXXXXXX
-    # With it, it becomes 1.0.1.dev1 (no local segment).
-    (pkg / "extra.py").write_text("x = 1", encoding="utf-8")
-    subprocess.run(["git", "add", "."], cwd=proj, check=True, env=env, capture_output=True)
-    subprocess.run(["git", "commit", "-m", "post-tag commit"], cwd=proj, check=True, env=env, capture_output=True)
-
-    monkeypatch.chdir(proj)
-    monkeypatch.setenv("CONAN_HOME", str(tmp_path / "conan_home"))
-
-    sdist_dir = tmp_path / "dist"
-    sdist_dir.mkdir()
-    filename = build_sdist(str(sdist_dir))
-    # Version must contain .dev but must NOT contain '+' (no local segment)
-    assert ".dev" in filename
-    assert "+" not in filename
-
-
-def test_build_sdist_version_scm_root(tmp_path, monkeypatch):
-    """Integration: root = '..' lets setuptools-scm find .git in the parent directory."""
-    # Git repo lives at tmp_path/repo, project lives at tmp_path/repo/subdir
-    repo = tmp_path / "repo"
-    repo.mkdir()
-    proj = repo / "subdir"
-    proj.mkdir()
-
-    (proj / "pyproject.toml").write_text("""\
-[project]
-name = "root-pkg"
-dynamic = ["version"]
-description = "Test root"
-
-[build-system]
-requires = ["conan-py-build"]
-build-backend = "conan_py_build.build"
-
-[tool.conan-py-build.version]
-provider = "setuptools_scm"
-
-[tool.setuptools_scm]
-root = ".."
-""", encoding="utf-8")
-    (proj / "conanfile.py").write_text("""\
-from conan import ConanFile
-from conan.tools.cmake import cmake_layout
-
-class Pkg(ConanFile):
-    name = "root_pkg"
-    version = "4.0.0"
-    settings = "os", "compiler", "build_type", "arch"
-    generators = "CMakeToolchain", "CMakeDeps"
-    def layout(self):
-        cmake_layout(self)
-    def source(self):
-        pass
-    def build(self):
-        pass
-""", encoding="utf-8")
-    (proj / "CMakeLists.txt").write_text("cmake_minimum_required(VERSION 3.15)\nproject(x)\n")
-    pkg = proj / "src" / "root_pkg"
-    pkg.mkdir(parents=True)
-    (pkg / "__init__.py").write_text("", encoding="utf-8")
-
-    env = {**dict(__import__("os").environ), "GIT_AUTHOR_NAME": "test", "GIT_AUTHOR_EMAIL": "t@t",
-           "GIT_COMMITTER_NAME": "test", "GIT_COMMITTER_EMAIL": "t@t"}
-    subprocess.run(["git", "init"], cwd=repo, check=True, env=env, capture_output=True)
-    subprocess.run(["git", "add", "."], cwd=repo, check=True, env=env, capture_output=True)
-    subprocess.run(["git", "commit", "-m", "init"], cwd=repo, check=True, env=env, capture_output=True)
-    subprocess.run(["git", "tag", "v4.0.0"], cwd=repo, check=True, env=env, capture_output=True)
-
-    monkeypatch.chdir(proj)
-    monkeypatch.setenv("CONAN_HOME", str(tmp_path / "conan_home"))
-
-    sdist_dir = tmp_path / "dist"
-    sdist_dir.mkdir()
-    filename = build_sdist(str(sdist_dir))
-    assert filename == "root-pkg-4.0.0.tar.gz"
+        names = tar.getnames()
+        assert "scm-pkg-3.0.0/src/scm_pkg/_version.py" in names

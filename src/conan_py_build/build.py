@@ -158,7 +158,8 @@ def _get_version_from_scm(source_dir: Path) -> str:
         )
 
     scm_config = _read_pyproject(source_dir).get("tool", {}).get("setuptools_scm", {})
-    return get_version(relative_to=str(source_dir / "pyproject.toml"), **scm_config)
+    scm_config.setdefault("relative_to", str(source_dir / "pyproject.toml"))
+    return get_version(**scm_config)
 
 
 def _resolve_version(project_metadata: dict, source_dir: Path) -> str:
