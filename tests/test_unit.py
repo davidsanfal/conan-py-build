@@ -17,7 +17,7 @@ from conan_py_build.build import (
     _create_dist_info,
     _build_wheel_with_tags,
     _copy_license_files_from_paths,
-    _get_version_provider,
+    _validate_version_config,
 )
 
 
@@ -44,7 +44,6 @@ requires = ["conan-py-build"]
 build-backend = "conan_py_build.build"
 
 [tool.conan-py-build.version]
-provider = "file"
 file = "python/myadder/__init__.py"
 
 [tool.conan-py-build.wheel]
@@ -104,7 +103,7 @@ def test_resolve_version_missing_falls_back_to_0_0_0(tmp_path):
     assert _resolve_version(meta, tmp_path) == "0.0.0"
 
 
-def test_resolve_version_dynamic_without_version_file_raises(tmp_path):
+def test_resolve_version_dynamic_without_version_config_raises(tmp_path):
     (tmp_path / "pyproject.toml").write_text("""[project]
 name = "pkg"
 dynamic = ["version"]
@@ -115,7 +114,7 @@ requires = ["conan-py-build"]
 build-backend = "conan_py_build.build"
 """, encoding="utf-8")
     meta = {"name": "pkg", "dynamic": ["version"]}
-    with pytest.raises(RuntimeError, match="version could not be resolved"):
+    with pytest.raises(RuntimeError, match="must define 'file' or 'provider'"):
         _resolve_version(meta, tmp_path)
 
 
@@ -244,7 +243,7 @@ def test_build_wheel_with_tags_produces_whl(tmp_path):
     assert (wheel_dir / name).is_file()
 
 
-def test_get_version_provider_invalid_raises(tmp_path):
+def test_validate_version_config_invalid_provider_raises(tmp_path):
     (tmp_path / "pyproject.toml").write_text("""[project]
 name = "bad"
 description = "Test"
@@ -256,5 +255,5 @@ build-backend = "conan_py_build.build"
 [tool.conan-py-build.version]
 provider = "invalid"
 """, encoding="utf-8")
-    with pytest.raises(RuntimeError, match="must be 'setuptools_scm' or 'file'"):
-        _get_version_provider(tmp_path)
+    with pytest.raises(RuntimeError, match="must be 'setuptools_scm'"):
+        _validate_version_config(tmp_path)

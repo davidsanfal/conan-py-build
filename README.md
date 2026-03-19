@@ -76,8 +76,8 @@ Configure in `pyproject.toml` under `[tool.conan-py-build]`:
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `version.provider` | Version provider: `"file"` or `"setuptools_scm"` (see [Dynamic version](#dynamic-version)) | (none) |
-| `version.file` | Path to a Python file containing `__version__ = "x.y.z"` (used when `provider = "file"`) | (none) |
+| `version.file` | Path to a Python file containing `__version__ = "x.y.z"` (see [Dynamic version](#dynamic-version)) | (none) |
+| `version.provider` | Set to `"setuptools_scm"` to resolve version from git tags (see [Dynamic version](#dynamic-version)). Mutually exclusive with `version.file`. | (none) |
 | `conanfile-path` | Path to the Conan recipe (directory containing `conanfile.py` or path to the file), relative to project root | `"."` (project root) |
 | `wheel.packages` | List of paths (relative to project root) of Python packages to include in the wheel; each must be a directory with `__init__.py` | `["src/<normalized_project_name>"]` |
 | `sdist.include` | List of paths or patterns to add to the sdist | `[]` |
@@ -86,13 +86,12 @@ Configure in `pyproject.toml` under `[tool.conan-py-build]`:
 
 ### Dynamic version
 
-Set `dynamic = ["version"]` in `[project]` (no `version` key) and configure the provider in `[tool.conan-py-build.version]`:
+Set `dynamic = ["version"]` in `[project]` (no `version` key) and configure the version source in `[tool.conan-py-build.version]`:
 
 **From a file** — reads `__version__ = "x.y.z"` from a Python file:
 
 ```toml
 [tool.conan-py-build.version]
-provider = "file"
 file = "src/mypackage/__init__.py"
 ```
 
@@ -105,6 +104,8 @@ provider = "setuptools_scm"
 
 The `setuptools-scm` options are configured in `[tool.setuptools_scm]` — see the
 [setuptools-scm docs](https://setuptools-scm.readthedocs.io/) for available options.
+
+> **Note:** `version.file` and `provider = "setuptools_scm"` are mutually exclusive.
 
 ### License files (PEP 639)
 
