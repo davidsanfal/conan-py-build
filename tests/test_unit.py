@@ -18,6 +18,7 @@ from conan_py_build.build import (
     _build_wheel_with_tags,
     _copy_license_files_from_paths,
     _validate_version_config,
+    _get_version_from_scm,
 )
 
 
@@ -241,6 +242,15 @@ def test_build_wheel_with_tags_produces_whl(tmp_path):
     tags = {"pyver": ["cp312"], "abi": ["cp312"], "arch": ["any"]}
     name = _build_wheel_with_tags(wheel_dir, staging_dir, "test_pkg", "1.0.0", tags)
     assert (wheel_dir / name).is_file()
+
+
+def test_get_version_from_scm_none_raises(tmp_path, monkeypatch):
+    """LookupError when setuptools-scm returns None (no git tags, no sdist)."""
+    (tmp_path / "pyproject.toml").write_text("[tool.setuptools_scm]\n")
+    import setuptools_scm
+    monkeypatch.setattr(setuptools_scm, "_get_version", lambda *a, **kw: None)
+    with pytest.raises(LookupError, match="setuptools-scm could not detect a version"):
+        _get_version_from_scm(tmp_path)
 
 
 def test_validate_version_config_invalid_provider_raises(tmp_path):
