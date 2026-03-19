@@ -178,7 +178,10 @@ def _get_version_from_scm(source_dir: Path) -> str:
     except TypeError:
         version = _get_version(config)
     if version is None:
-        raise LookupError("setuptools-scm could not detect a version.")
+        raise LookupError(
+            "setuptools-scm could not detect a version. "
+            "Build from a git repo with tags, or from an sdist."
+        )
     return version
 
 
