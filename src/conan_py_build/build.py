@@ -12,6 +12,8 @@ from conan.api.conan_api import ConanAPI
 from conan.cli.cli import Cli
 from conan.tools.env import VirtualBuildEnv
 from distlib.wheel import Wheel
+
+from conan_py_build.wheel_deploy import move_deploy_to_wheel, patch_rpath
 from packaging.tags import sys_tags
 from packaging.utils import canonicalize_name
 from pyproject_metadata import StandardMetadata
@@ -450,6 +452,8 @@ def _do_build_wheel(
     build_folder_conf = f"tools.cmake.cmake_layout:build_folder={(base_dir / 'build').resolve()}"
     user_presets_conf = "tools.cmake.cmaketoolchain:user_presets="  # empty = disable CMakeUserPresets.json
 
+    runtime_deploy_dir = (base_dir / "runtime_deploy").resolve()
+
     conan_api = ConanAPI()
     cli = Cli(conan_api)
     cli.add_commands()
@@ -491,6 +495,10 @@ def _do_build_wheel(
         resolved_conanfile,
         "-of",
         str(staging_dir),
+        "-d",
+        "runtime_deploy",
+        "--deployer-folder",
+        str(runtime_deploy_dir),
         "-c",
         build_folder_conf,
         "-c",
@@ -537,6 +545,12 @@ def _do_build_wheel(
         ignore=lambda _, names: [n for n in names if n in ("conaninfo.txt", "conanmanifest.txt")],
         dirs_exist_ok=True,
     )
+
+    # Add rpath to extension modules only, we are not touching shared libs from Conan.
+    patch_rpath(staging_dir)
+
+    # Copy shared libs from Conan's runtime_deploy to the wheel layout.
+    move_deploy_to_wheel(runtime_deploy_dir, staging_dir)
 
     # Create dist-info
     _create_dist_info(staging_dir, project_metadata, source_dir)
