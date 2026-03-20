@@ -193,6 +193,31 @@ def test_get_wheel_tags_from_env(monkeypatch):
     }
 
 
+@pytest.mark.parametrize("py_api,expected_pyver,expected_abi", [
+    ("cp33", ["cp33"], ["abi3"]),
+    (f"cp3{sys.version_info.minor}", [f"cp3{sys.version_info.minor}"], ["abi3"]),
+    (f"cp3{sys.version_info.minor + 10}", None, None),  # future → fallback
+])
+def test_get_wheel_tags_py_api(py_api, expected_pyver, expected_abi):
+    tags = _get_wheel_tags(py_api=py_api)
+    if expected_pyver:
+        assert tags["pyver"] == expected_pyver and tags["abi"] == expected_abi
+    else:
+        assert tags["abi"] != ["abi3"]
+
+
+def test_get_wheel_tags_py_api_env_override_and_invalid(monkeypatch):
+    monkeypatch.setenv("WHEEL_ARCH", "win_amd64")
+    monkeypatch.setenv("WHEEL_PYVER", "cp310")
+    monkeypatch.setenv("WHEEL_ABI", "cp310")
+    assert _get_wheel_tags(py_api="cp312")["pyver"] == ["cp310"]
+    monkeypatch.delenv("WHEEL_ARCH")
+    monkeypatch.delenv("WHEEL_PYVER")
+    monkeypatch.delenv("WHEEL_ABI")
+    with pytest.raises(ValueError, match="must be 'cpXY'"):
+        _get_wheel_tags(py_api="invalid")
+
+
 def test_check_wheel_package_path_ok(tmp_path):
     pkg = tmp_path / "src" / "mypkg"
     pkg.mkdir(parents=True)

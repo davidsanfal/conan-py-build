@@ -89,6 +89,7 @@ Configure options in `pyproject.toml` (nested under `[tool.conan-py-build]`):
 | `version.file` | `[tool.conan-py-build.version]` | Python file containing `__version__ = "x.y.z"` (see [Dynamic version](#dynamic-version)) | (none) |
 | `version.provider` | `[tool.conan-py-build.version]` | Set to `"setuptools_scm"` for version from git tags. Mutually exclusive with `version.file`. | (none) |
 | `packages` | `[tool.conan-py-build.wheel]` | List of paths (relative to project root) of Python packages in the wheel. Each path must be a directory with `__init__.py` | `["src/<normalized_name>"]` |
+| `py-api` | `[tool.conan-py-build.wheel]` | Stable ABI / Limited API tag — see [Stable ABI](#stable-abi--limited-api) | `""` (auto-detect) |
 | `include` / `exclude` | `[tool.conan-py-build.sdist]` | Paths or glob patterns to add to or remove from the sdist | `[]` / `[]` |
 
 ### Dynamic version
@@ -146,6 +147,24 @@ packages = ["src/mypackage", "src/other_package"]
 ```
 
 See [basic-pybind11](examples/basic-pybind11/) for multiple packages (`python/...` + `src/...`).
+
+### Stable ABI / Limited API
+
+Set `wheel.py-api` to build wheels targeting Python's
+[Stable ABI](https://docs.python.org/3/c-api/stable.html), producing an `abi3`
+wheel that works across multiple Python versions without recompilation:
+
+```toml
+[tool.conan-py-build.wheel]
+py-api = "cp312"   # wheel works on CPython 3.12+
+```
+
+- **`"cpXY"`** (e.g. `"cp312"`): Stable ABI → `cpXY-abi3-<platform>`. Requires
+  building on CPython ≥ target version. Ignored on incompatible interpreters.
+- **`""`** (default): auto-detect from the current interpreter.
+
+Your C/C++ extension must be compiled against the Limited API (e.g. nanobind's
+`STABLE_ABI`, or pybind11's `Py_LIMITED_API`).
 
 ### Sdist include / exclude
 
