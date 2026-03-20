@@ -89,6 +89,7 @@ Configure options in `pyproject.toml` (nested under `[tool.conan-py-build]`):
 | `version.file` | `[tool.conan-py-build.version]` | Python file containing `__version__ = "x.y.z"` (see [Dynamic version](#dynamic-version)) | (none) |
 | `version.provider` | `[tool.conan-py-build.version]` | Set to `"setuptools_scm"` for version from git tags. Mutually exclusive with `version.file`. | (none) |
 | `packages` | `[tool.conan-py-build.wheel]` | List of paths (relative to project root) of Python packages in the wheel. Each path must be a directory with `__init__.py` | `["src/<normalized_name>"]` |
+| `install-dir` | `[tool.conan-py-build.wheel]` | Subdirectory inside the wheel where CMake install artifacts are placed | `""` (wheel root) |
 | `py-api` | `[tool.conan-py-build.wheel]` | Stable ABI / Limited API tag — see [Stable ABI](#stable-abi--limited-api) | `""` (auto-detect) |
 | `include` / `exclude` | `[tool.conan-py-build.sdist]` | Paths or glob patterns to add to or remove from the sdist | `[]` / `[]` |
 

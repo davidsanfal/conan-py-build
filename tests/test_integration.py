@@ -238,3 +238,31 @@ version_file = "src/scm_pkg/_version.py"
     with tarfile.open(sdist_dir / filename, "r:gz") as tar:
         names = tar.getnames()
         assert "scm-pkg-3.0.0/src/scm_pkg/_version.py" in names
+
+
+def test_build_wheel_install_dir(tmp_path, monkeypatch):
+    """Integration: wheel.install-dir places conan artifacts under the given subdirectory."""
+    proj = tmp_path / "proj"
+    make_integration_project(proj, pkg_name="mypkg", pyproject_toml="""\
+[project]
+name = "mypkg"
+version = "1.0.0"
+description = "Test"
+
+[build-system]
+requires = ["conan-py-build"]
+build-backend = "conan_py_build.build"
+
+[tool.conan-py-build.wheel]
+install-dir = "mypkg"
+""", license_text="")
+    monkeypatch.chdir(proj)
+    monkeypatch.setenv("CONAN_HOME", str(tmp_path / "conan_home"))
+
+    wheel_dir = tmp_path / "dist"
+    wheel_dir.mkdir()
+    name = build_wheel(str(wheel_dir))
+
+    with zipfile.ZipFile(wheel_dir / name) as zf:
+        non_meta = [n for n in zf.namelist() if ".dist-info/" not in n]
+        assert all(n.startswith("mypkg/") for n in non_meta)

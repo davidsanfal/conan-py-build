@@ -534,8 +534,10 @@ def _do_build_wheel(
         raise RuntimeError(f"Conan export-pkg failed: {e}") from e
 
     pkg_path = Path(export_result["graph"].serialize()["nodes"]["0"]["package_folder"])
+    install_dir = tool.get("wheel", {}).get("install-dir", "")
+    pkg_dest = (staging_dir / install_dir).resolve() if install_dir else staging_dir
     shutil.copytree(
-        pkg_path, staging_dir,
+        pkg_path, pkg_dest,
         ignore=lambda _, names: [n for n in names if n in ("conaninfo.txt", "conanmanifest.txt")],
         dirs_exist_ok=True,
     )
