@@ -2,7 +2,6 @@ import ast
 import io
 import os
 import shutil
-import sys
 import tarfile
 import tempfile
 from contextlib import contextmanager
@@ -26,8 +25,18 @@ except ImportError:
     import tomli as tomllib
 
 
-def _get_wheel_tags(py_api: str = "") -> dict:
-    """Get wheel tags. Priority: WHEEL_* env vars > py_api > auto-detect."""
+def _get_wheel_tags() -> dict:
+    """
+    Get wheel tags for the target platform.
+
+    If WHEEL_ARCH environment variable is set (e.g., from a Conan profile's [buildenv]),
+    uses the environment variables:
+        - WHEEL_PYVER: Python version tag (e.g., "cp312", "py3")
+        - WHEEL_ABI: ABI tag (e.g., "cp312", "abi3", "none")
+        - WHEEL_ARCH: Platform tag (e.g., "manylinux_2_28_x86_64", "win_amd64")
+
+    Otherwise, auto-detects tags from the current platform using packaging library.
+    """
     # Check for cross-compile env vars (typically set by Conan profile [buildenv])
     wheel_arch = os.environ.get("WHEEL_ARCH")
     if wheel_arch:
@@ -41,14 +50,11 @@ def _get_wheel_tags(py_api: str = "") -> dict:
 
     # Default: auto-detect from current platform
     tag = next(sys_tags())
-    if py_api:
-        if py_api.startswith("cp3") and py_api[3:].isdecimal():
-            if sys.implementation.name == "cpython" and int(py_api[3:]) <= sys.version_info.minor:
-                return {"pyver": [py_api], "abi": ["abi3"], "arch": [tag.platform]}
-        else:
-            raise ValueError(f"wheel.py-api must be 'cpXY' (e.g. 'cp312'), got {py_api!r}")
-
-    return {"pyver": [tag.interpreter], "abi": [tag.abi], "arch": [tag.platform]}
+    return {
+        "pyver": [tag.interpreter],
+        "abi": [tag.abi],
+        "arch": [tag.platform],
+    }
 
 
 def _read_pyproject(project_dir: Path) -> dict:
@@ -534,10 +540,8 @@ def _do_build_wheel(
         raise RuntimeError(f"Conan export-pkg failed: {e}") from e
 
     pkg_path = Path(export_result["graph"].serialize()["nodes"]["0"]["package_folder"])
-    install_dir = tool.get("wheel", {}).get("install-dir", "")
-    pkg_dest = (staging_dir / install_dir).resolve() if install_dir else staging_dir
     shutil.copytree(
-        pkg_path, pkg_dest,
+        pkg_path, staging_dir,
         ignore=lambda _, names: [n for n in names if n in ("conaninfo.txt", "conanmanifest.txt")],
         dirs_exist_ok=True,
     )
@@ -557,7 +561,7 @@ def _do_build_wheel(
     env_vars = buildenv.environment().vars(conanfile)
 
     with env_vars.apply():
-        tags = _get_wheel_tags(py_api=tool.get("wheel", {}).get("py-api", ""))
+        tags = _get_wheel_tags()
         wheel_name = _build_wheel_with_tags(wheel_dir, staging_dir, name, version, tags)
 
     return wheel_name

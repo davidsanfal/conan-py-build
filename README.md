@@ -89,8 +89,6 @@ Configure options in `pyproject.toml` (nested under `[tool.conan-py-build]`):
 | `version.file` | `[tool.conan-py-build.version]` | Python file containing `__version__ = "x.y.z"` (see [Dynamic version](#dynamic-version)) | (none) |
 | `version.provider` | `[tool.conan-py-build.version]` | Set to `"setuptools_scm"` for version from git tags. Mutually exclusive with `version.file`. | (none) |
 | `packages` | `[tool.conan-py-build.wheel]` | List of paths (relative to project root) of Python packages in the wheel. Each path must be a directory with `__init__.py` | `["src/<normalized_name>"]` |
-| `install-dir` | `[tool.conan-py-build.wheel]` | Subdirectory inside the wheel where CMake install artifacts are placed | `""` (wheel root) |
-| `py-api` | `[tool.conan-py-build.wheel]` | Stable ABI / Limited API tag — see [Stable ABI](#stable-abi--limited-api) | `""` (auto-detect) |
 | `include` / `exclude` | `[tool.conan-py-build.sdist]` | Paths or glob patterns to add to or remove from the sdist | `[]` / `[]` |
 
 ### Dynamic version
@@ -148,24 +146,6 @@ packages = ["src/mypackage", "src/other_package"]
 ```
 
 See [basic-pybind11](examples/basic-pybind11/) for multiple packages (`python/...` + `src/...`).
-
-### Stable ABI / Limited API
-
-Set `wheel.py-api` to build wheels targeting Python's
-[Stable ABI](https://docs.python.org/3/c-api/stable.html), producing an `abi3`
-wheel that works across multiple Python versions without recompilation:
-
-```toml
-[tool.conan-py-build.wheel]
-py-api = "cp312"   # wheel works on CPython 3.12+
-```
-
-- **`"cpXY"`** (e.g. `"cp312"`): Stable ABI → `cpXY-abi3-<platform>`. Requires
-  building on CPython ≥ target version. Ignored on incompatible interpreters.
-- **`""`** (default): auto-detect from the current interpreter.
-
-Your C/C++ extension must be compiled against the Limited API (e.g. nanobind's
-`STABLE_ABI`, or pybind11's `Py_LIMITED_API`).
 
 ### Sdist include / exclude
 
@@ -234,6 +214,41 @@ If your extension links to shared libs from Conan, the backend collects them
 during the build and merges that output into the **wheel staging root** next to
 your packages (RPATH is fixed on the extension to point at the parent directory so
 those libs resolve).
+
+If your project installs shared libs in a subdirectory (e.g. `lib/`), set
+the RPATH in your CMakeLists.txt so the extension can find them at runtime:
+
+```cmake
+if(APPLE)
+  set_target_properties(myext PROPERTIES INSTALL_RPATH "@loader_path/lib")
+else()
+  set_target_properties(myext PROPERTIES INSTALL_RPATH "$ORIGIN/lib")
+endif()
+```
+
+### Custom wheel tags
+
+A wheel filename encodes three tags: `{pyver}-{abi}-{platform}`. Override them
+by setting `WHEEL_PYVER`, `WHEEL_ABI` and/or `WHEEL_ARCH` via a Conan
+profile's `[buildenv]` and referencing it with `extra-profile`:
+
+```ini
+# wheel-tags.profile
+[buildenv]
+WHEEL_PYVER=cp312
+WHEEL_ABI=abi3
+```
+
+```toml
+# pyproject.toml
+[tool.conan-py-build]
+extra-profile = "wheel-tags.profile"
+```
+
+This is useful for cross-compilation or for producing
+[Stable ABI](https://docs.python.org/3/c-api/stable.html) (`abi3`) wheels.
+For `abi3`, your extension must be compiled against the Limited API (e.g.
+nanobind's `STABLE_ABI` or pybind11's `Py_LIMITED_API`).
 
 ## Examples
 
