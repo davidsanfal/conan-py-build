@@ -215,17 +215,6 @@ during the build and merges that output into the **wheel staging root** next to
 your packages (RPATH is fixed on the extension to point at the parent directory so
 those libs resolve).
 
-If your project installs shared libs in a subdirectory (e.g. `lib/`), set
-the RPATH in your CMakeLists.txt so the extension can find them at runtime:
-
-```cmake
-if(APPLE)
-  set_target_properties(myext PROPERTIES INSTALL_RPATH "@loader_path/lib")
-else()
-  set_target_properties(myext PROPERTIES INSTALL_RPATH "$ORIGIN/lib")
-endif()
-```
-
 ### Custom wheel tags
 
 A wheel filename encodes three tags: `{pyver}-{abi}-{platform}`. Override them
