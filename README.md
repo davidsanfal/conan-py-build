@@ -183,6 +183,9 @@ pip wheel . --no-build-isolation \
     -w dist/
 ```
 
+> **Wheel tags.** Override `{pyver}-{abi}-{platform}` wheel tags via
+> `WHEEL_PYVER`, `WHEEL_ABI` and/or `WHEEL_ARCH` in a profile's `[buildenv]`.
+
 **Extra profile in `pyproject.toml`.** You can add one extra Conan profile file
 via `[tool.conan-py-build].extra-profile`. It is **composed on top of** the
 profiles applied first (default or those passed via `-C`). The extra profile is
@@ -214,30 +217,6 @@ If your extension links to shared libs from Conan, the backend collects them
 during the build and merges that output into the **wheel staging root** next to
 your packages (RPATH is fixed on the extension to point at the parent directory so
 those libs resolve).
-
-### Custom wheel tags
-
-A wheel filename encodes three tags: `{pyver}-{abi}-{platform}`. Override them
-by setting `WHEEL_PYVER`, `WHEEL_ABI` and/or `WHEEL_ARCH` via a Conan
-profile's `[buildenv]` and referencing it with `extra-profile`:
-
-```ini
-# wheel-tags.profile
-[buildenv]
-WHEEL_PYVER=cp312
-WHEEL_ABI=abi3
-```
-
-```toml
-# pyproject.toml
-[tool.conan-py-build]
-extra-profile = "wheel-tags.profile"
-```
-
-This is useful for cross-compilation or for producing
-[Stable ABI](https://docs.python.org/3/c-api/stable.html) (`abi3`) wheels.
-For `abi3`, your extension must be compiled against the Limited API (e.g.
-nanobind's `STABLE_ABI` or pybind11's `Py_LIMITED_API`).
 
 ## Examples
 
